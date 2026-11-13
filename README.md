@@ -20,7 +20,7 @@ Developed and tested on Python 3.14 (macOS).
 
 ```bash
 # 1. Install
-git clone <this repo> recipe_chatbot && cd recipe_chatbot
+git clone https://github.com/piyushsonker024-hue/recipe_chatbot.git && cd recipe_chatbot
 python3 -m venv venv
 source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r requirements.txt
