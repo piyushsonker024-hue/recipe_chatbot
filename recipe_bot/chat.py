@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         parser = IntentParser()
     except Exception as e:     # missing key / SDK problem: fail with a clear message
         print(f"Could not start the language model client: {e}\n"
-              "Set ANTHROPIC_API_KEY (see README).", file=sys.stderr)
+              "Set GEMINI_API_KEY (see README).", file=sys.stderr)
         return 1
     session = Session()
     print(HELP + "\n")

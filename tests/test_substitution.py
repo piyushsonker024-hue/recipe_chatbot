@@ -177,3 +177,25 @@ def test_brown_sugar_is_not_a_technique(sconn):
     _, steps = rewrite(sconn, recipe, "butter", "oil")
     assert steps[0].changed and steps[0].review is None
     assert "cream" in steps[1].review
+
+
+def test_search_web_collects_text_and_grounding_links():
+    from types import SimpleNamespace as NS
+
+    from recipe_bot.substitution import search_web
+    calls = []
+
+    def generate_content(**kwargs):
+        calls.append(kwargs)
+        chunks = [NS(web=NS(title="example.org", uri="https://example.org/a")),
+                  NS(web=NS(title="example.org", uri="https://example.org/a")),   # duplicate
+                  NS(web=None)]
+        return NS(text=" Use 3/4 cup oil. ",
+                  candidates=[NS(grounding_metadata=NS(grounding_chunks=chunks))])
+
+    ext = search_web(NS(models=NS(generate_content=generate_content)),
+                     "Banana Bread", "butter", "oil", "test-model")
+    assert ext.text == "Use 3/4 cup oil."
+    assert ext.sources == [("example.org", "https://example.org/a")]
+    assert calls[0]["config"].tools[0].google_search is not None
+    assert "butter" in calls[0]["contents"] and "oil" in calls[0]["contents"]

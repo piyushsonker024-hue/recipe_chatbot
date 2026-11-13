@@ -73,7 +73,7 @@ Active filters: your ingredients: 2 lb chicken breast, 1 onion, 3 cloves garlic,
 - PASS: contains 'coverage', 'missing', 'score =' (reply contains ('coverage', 'missing', 'score ='))
 - PASS: contains 'not verified' (reply contains ('not verified',))
 
-_1.1 s_
+_1.2 s_
 
 ## Turn 2
 
@@ -145,4 +145,4 @@ Active filters: excluded: milk, butter, cheese, cream, yogurt, cream cheese, sou
 - PASS: every result is within the step limit (all 5 have <= 4 steps)
 - PASS: session keeps have=['2 lb chicken breast', 'rice'] (session as expected)
 
-_0.5 s_
+_0.6 s_

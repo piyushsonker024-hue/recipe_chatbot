@@ -11,8 +11,8 @@ and what the evaluation found. Detailed notes, with more numbers, are in
 
 The assignment's main risk is an answer that sounds right but isn't in the data. So the
 LLM has one job: it turns each message into a structured `TurnIntent` (action, dish text,
-include and exclude terms, step limit, statistic, substitution target…). It uses Claude
-structured outputs, so the code receives validated, typed fields. Everything after that is
+include and exclude terms, step limit, statistic, substitution target…). It uses Gemini's
+structured output (a JSON schema generated from the Pydantic model, validated again in code), so the code receives validated, typed fields. Everything after that is
 deterministic code: session rules, SQL filters, statistics, ranking, evidence mining, and
 **template** replies.
 
@@ -149,8 +149,8 @@ The system prefers saying "I don't know" to an unsupported answer:
 
 ## 9. External search
 
-Web search is secondary and runs only when the user asks ("search the web"). It calls Claude with the
-server-side web search tool, asking for ratios, effects on the result, and where sources disagree, with no safety claims.
+Web search is secondary and runs only when the user asks ("search the web"). It calls Gemini with
+Google Search grounding, asking for ratios, effects on the result, and where sources disagree, with no safety claims.
 The output appears in its own section, labeled "WEB SEARCH, not from the dataset, not verified by this system",
 with links, after the dataset evidence. A failure there is never fatal. The live path is tested
 only with a fake client so far, because there was no API key on the build machine.
@@ -196,4 +196,4 @@ listed recipe is re-checked against the exclusions and step limit, and every cit
 The code, tests and docs were written with Claude Code, an AI coding assistant, working step by step from the
 plan in `CLAUDE.md`. I reviewed the design decisions. Measurements and test expectations were checked against the real data,
 and the eval's numbers are recomputed independently rather than trusted. At runtime the app
-uses Claude (`claude-opus-5-5`) only to parse messages, and for web search when the user asks.
+uses Google Gemini (`gemini-3.8-flash` by default) only to parse messages, and for web search when the user asks.

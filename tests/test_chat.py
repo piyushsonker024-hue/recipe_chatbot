@@ -2,6 +2,8 @@
 Recipes come from the 6-recipe fixture in conftest.py."""
 from types import SimpleNamespace
 
+from google.genai.types import FinishReason
+
 from recipe_bot.answer import handle
 from recipe_bot.chat import turn
 from recipe_bot.intent import Expansion, IntentParser, TurnIntent
@@ -107,43 +109,48 @@ def test_bad_reference_asks_back(conn):
     assert "can't tell which recipe" in reply
 
 
-# ---------- full turn with a fake Claude client ----------
+# ---------- full turn with a fake Gemini client ----------
 
-class FakeMessages:
-    def __init__(self, intent, stop_reason="end_turn"):
-        self.intent, self.stop_reason, self.calls = intent, stop_reason, []
+class FakeModels:
+    """Stands in for client.models: returns `text` as the model's JSON reply."""
+    def __init__(self, text, finish_reason=FinishReason.STOP):
+        self.text, self.finish_reason, self.calls = text, finish_reason, []
 
-    def parse(self, **kwargs):
+    def generate_content(self, **kwargs):
         self.calls.append(kwargs)
-        return SimpleNamespace(stop_reason=self.stop_reason, parsed_output=self.intent)
+        return SimpleNamespace(text=self.text,
+                               candidates=[SimpleNamespace(finish_reason=self.finish_reason)])
 
 
-def fake_parser(intent, stop_reason="end_turn"):
-    messages = FakeMessages(intent, stop_reason)
-    client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
-    return IntentParser(client=client, model="test-model"), messages
+def fake_parser(intent, finish_reason=FinishReason.STOP, text=None):
+    models = FakeModels(text if text is not None else
+                        (intent.model_dump_json() if intent else ""), finish_reason)
+    return IntentParser(client=SimpleNamespace(models=models), model="test-model"), models
 
 
 def test_turn_sends_session_context_and_schema(conn):
     s = Session(last_ids=["ar_bb2"], exclude=["egg"])
-    parser, messages = fake_parser(I(action="show_recipe", result_number=1))
+    parser, models = fake_parser(I(action="show_recipe", result_number=1))
     reply = turn(conn, s, parser, "show me the first one")
     assert "Vegan Banana Bread" in reply
-    call = messages.calls[0]
-    assert call["output_format"] is TurnIntent and call["model"] == "test-model"
-    content = call["messages"][0]["content"]
-    assert '"excluded": ["egg"]' in content and "Vegan Banana Bread" in content
+    call = models.calls[0]
+    assert call["model"] == "test-model"
+    assert call["config"].response_json_schema == TurnIntent.model_json_schema()
+    assert call["config"].response_mime_type == "application/json"
+    assert '"excluded": ["egg"]' in call["contents"] and "Vegan Banana Bread" in call["contents"]
 
 
-def test_refusal_gives_rephrase_message(conn):
-    parser, _ = fake_parser(None, stop_reason="refusal")
+def test_blocked_or_invalid_output_gives_rephrase_message(conn):
+    parser, _ = fake_parser(None, finish_reason=FinishReason.SAFETY)
+    assert "couldn't interpret" in turn(conn, Session(), parser, "???")
+    parser, _ = fake_parser(None, text='{"action": "dance"}')      # fails TurnIntent validation
     assert "couldn't interpret" in turn(conn, Session(), parser, "???")
 
 
 def test_local_commands_skip_the_llm(conn):
-    parser, messages = fake_parser(I(action="help"))
+    parser, models = fake_parser(I(action="help"))
     assert "Active filters" in turn(conn, Session(), parser, "/state")
-    assert messages.calls == []
+    assert models.calls == []
 
 
 def test_expansion_shown_when_added_then_only_in_state(conn):

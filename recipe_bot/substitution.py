@@ -471,24 +471,15 @@ EXTERNAL_PROMPT = (
 
 
 def search_web(client, title: str, target: str, sub: str | None, model: str) -> ExternalResult:
-    """Ask Claude with the web search tool; collect text and source links."""
-    messages = [{"role": "user", "content": EXTERNAL_PROMPT.format(
-        target=target, sub=sub or "a suitable replacement", title=title)}]
-    for _ in range(3):                                   # resume on pause_turn
-        response = client.messages.create(
-            model=model, max_tokens=4096, output_config={"effort": "low"},
-            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
-            messages=messages)
-        if response.stop_reason != "pause_turn":
-            break
-        messages = messages[:1] + [{"role": "assistant", "content": response.content}]
-    text, sources = [], []
-    for block in response.content:
-        if block.type == "text":
-            text.append(block.text)
-            for cite in getattr(block, "citations", None) or []:
-                if getattr(cite, "url", None):
-                    sources.append((getattr(cite, "title", "") or cite.url, cite.url))
-        elif block.type == "web_search_tool_result" and isinstance(block.content, list):
-            sources += [(r.title, r.url) for r in block.content if getattr(r, "url", None)]
-    return ExternalResult(text="".join(text).strip(), sources=list(dict.fromkeys(sources)))
+    """Ask Gemini with Google Search grounding; collect the text and the source links."""
+    from google.genai import types
+    response = client.models.generate_content(
+        model=model,
+        contents=EXTERNAL_PROMPT.format(target=target, sub=sub or "a suitable replacement", title=title),
+        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
+    )
+    candidates = response.candidates or []
+    meta = candidates[0].grounding_metadata if candidates else None
+    sources = [(c.web.title or c.web.uri, c.web.uri)
+               for c in (getattr(meta, "grounding_chunks", None) or []) if c.web and c.web.uri]
+    return ExternalResult(text=(response.text or "").strip(), sources=list(dict.fromkeys(sources)))

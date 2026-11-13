@@ -8,7 +8,7 @@ recomputed by a **different path** from the one the bot uses (raw JSON, or plain
 python -m evals.run_eval              # scripted mode: no API key needed (~15 s)
 python -m evals.run_eval --live       # the real LLM parser reads each message and is scored too
 python -m evals.run_eval --case ingredient_matching
-python -m evals.one_shot              # one-shot LLM baseline (needs ANTHROPIC_API_KEY)
+python -m evals.one_shot              # one-shot LLM baseline (needs GEMINI_API_KEY)
 ```
 
 Outputs: [RESULTS.md](RESULTS.md) (the summary table and failed checks) and

@@ -35,8 +35,9 @@ pip install -r requirements.txt
 python -m recipe_bot.store            # add --rebuild to rebuild
 
 # 4. API key (used to parse messages, and for web search only when you ask)
-export ANTHROPIC_API_KEY=sk-ant-...   # never commit it; .env is git-ignored
-# optional: export RECIPE_BOT_MODEL=claude-opus-5-5   (the default)
+#    Get a Gemini API key at https://aistudio.google.com/apikey
+export GEMINI_API_KEY=...             # never commit it; .env is git-ignored
+# optional: export RECIPE_BOT_MODEL=gemini-3.8-flash   (the default; any Gemini model ID works)
 
 # 5. Chat
 python main.py                        # add --debug to print each parsed intent
@@ -74,7 +75,7 @@ and the one-shot comparison. Transcripts of each test conversation are in
 
 ```
 3 JSON files -> data_loader -> normalizer + step counter -> SQLite (FTS5 + ingredient table)
-user message -> intent.py (Claude: structured TurnIntent) -> session.py (deterministic state rules)
+user message -> intent.py (Gemini: structured TurnIntent) -> session.py (deterministic state rules)
              -> search / stats / matcher / substitution (code over the data) -> answer.py (template reply)
 ```
 
@@ -105,5 +106,5 @@ user message -> intent.py (Claude: structured TurnIntent) -> session.py (determi
 
 The code, tests and docs were written with Claude Code (an AI coding assistant), step by step
 from the plan in `CLAUDE.md`. The design was reviewed, and the results were checked against the real
-data. At runtime the app calls Claude (`claude-opus-5-5`) to parse messages into structured intents,
-and for web search when the user asks for it.
+data. At runtime the app calls Google Gemini (`gemini-3.8-flash` by default) to parse messages into
+structured intents, and for Google Search-grounded web search when the user asks for it.

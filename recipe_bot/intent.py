@@ -1,12 +1,13 @@
-"""Parse one user message into a structured TurnIntent with Claude.
+"""Parse one user message into a structured TurnIntent with Gemini.
 
 This is the only place the LLM is used, and it only classifies and extracts:
 it never answers, counts or names recipes. The response is constrained to
 the TurnIntent schema (structured outputs, validated by Pydantic), so the
 rest of the system receives typed fields, not free text.
 
-Model: claude-opus-5-5 at low effort (an extraction task). Server-side
-refusal fallback is enabled. API key: ANTHROPIC_API_KEY environment variable.
+Model: gemini-3.8-flash with low thinking (an extraction task). The reply is
+constrained to TurnIntent's JSON schema and validated again with Pydantic.
+API key: GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable.
 Override the model with RECIPE_BOT_MODEL.
 """
 
@@ -14,9 +15,10 @@ import json
 import os
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from google.genai import types
+from pydantic import BaseModel, Field, ValidationError
 
-MODEL = os.environ.get("RECIPE_BOT_MODEL", "claude-opus-5-5")
+MODEL = os.environ.get("RECIPE_BOT_MODEL", "gemini-3.8-flash")
 
 StatName = Literal[
     "count", "ingredient_share", "top_ingredients", "step_stats",
@@ -117,29 +119,42 @@ def build_context(session, titles: dict[str, str]) -> str:
 
 
 class IntentParser:
-    """Wraps the Claude call. `client` is injectable so tests need no API key."""
+    """Wraps the Gemini call. `client` is injectable so tests need no API key."""
 
     def __init__(self, client=None, model: str = MODEL):
-        if client is None:
-            import anthropic
-            client = anthropic.Anthropic()
-        self.client = client
+        self.client = client if client is not None else make_client()
         self.model = model
 
     def parse(self, message: str, session, titles: dict[str, str]) -> TurnIntent | None:
-        """Return the intent, or None if the model declined or the output was unusable."""
-        response = self.client.beta.messages.parse(
+        """Return the intent, or None if the model was blocked, cut off, or returned
+        something that does not validate against TurnIntent."""
+        response = self.client.models.generate_content(
             model=self.model,
-            max_tokens=4096,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            output_config={"effort": "low"},
-            system=[{"type": "text", "text": SYSTEM_PROMPT,
-                     "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content":
-                       f"Session state:\n{build_context(session, titles)}\n\nUser message:\n{message}"}],
-            output_format=TurnIntent,
+            contents=f"Session state:\n{build_context(session, titles)}\n\nUser message:\n{message}",
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_json_schema=TurnIntent.model_json_schema(),
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
+                max_output_tokens=8192,
+            ),
         )
-        if response.stop_reason in ("refusal", "max_tokens"):
+        if not finished(response):
             return None
-        return response.parsed_output
+        try:
+            return TurnIntent.model_validate_json(response.text)
+        except ValidationError:
+            return None
+
+
+def make_client():
+    """Gemini client; reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment."""
+    from google import genai
+    return genai.Client()
+
+
+def finished(response) -> bool:
+    """True if the model completed normally (not blocked by safety, not cut off)."""
+    candidates = getattr(response, "candidates", None) or []
+    return bool(candidates) and candidates[0].finish_reason == types.FinishReason.STOP \
+        and bool(response.text)

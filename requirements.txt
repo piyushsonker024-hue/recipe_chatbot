@@ -1,7 +1,7 @@
 # Runtime
 numpy==2.5.4
 pandas==2.3.3
-anthropic==2.8.0
+google-genai==3.3.0
 pydantic==2.14.3
 
 # Tests

@@ -1,7 +1,7 @@
-"""One-shot LLM baseline: ask Claude the same questions with no access to the data,
+"""One-shot LLM baseline: ask Gemini the same questions with no access to the data,
 then grade its answers against what this system computes.
 
-    python -m evals.one_shot          (needs ANTHROPIC_API_KEY; writes evals/ONE_SHOT.md)
+    python -m evals.one_shot          (needs GEMINI_API_KEY; writes evals/ONE_SHOT.md)
 
 Grading is automatic where it can be (numbers within tolerance, cited IDs exist in
 the dataset); every answer is also saved verbatim for manual review.
@@ -10,6 +10,8 @@ the dataset); every answer is also saved verbatim for manual review.
 import re
 import sys
 from pathlib import Path
+
+from google.genai import types
 
 from recipe_bot.intent import MODEL
 from recipe_bot.search import SearchQuery, search
@@ -68,20 +70,20 @@ def exists(conn, rid):
 
 def main() -> int:
     try:
-        import anthropic
-        client = anthropic.Anthropic()
+        from recipe_bot.intent import make_client
+        client = make_client()
     except Exception as e:
-        print(f"Needs ANTHROPIC_API_KEY ({e})", file=sys.stderr)
+        print(f"Needs GEMINI_API_KEY ({e})", file=sys.stderr)
         return 1
     conn = connect()
     lines = ["# One-shot LLM baseline", "",
              f"Model: {MODEL}, no tools, no data. Each answer is graded against this system's "
              "computed result; answers are verbatim.", ""]
     for c in cases(conn):
-        response = client.messages.create(
-            model=MODEL, max_tokens=1024, system=CONTEXT,
-            messages=[{"role": "user", "content": c["question"]}])
-        answer = "".join(b.text for b in response.content if b.type == "text").strip()
+        response = client.models.generate_content(
+            model=MODEL, contents=c["question"],
+            config=types.GenerateContentConfig(system_instruction=CONTEXT))
+        answer = (response.text or "").strip()
         ok = c["grade"](answer)
         lines += [f"## {c['question']}", "", f"**Grounded answer (this system):** {c['truth']}", "",
                   f"**One-shot grade:** {'correct' if ok else 'WRONG or ungrounded'}", "",

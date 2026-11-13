@@ -38,7 +38,7 @@ Active filters: no filters
 - PASS: 'garlic' share agrees with an independent SQL count (bot 32,908/124,483; plain SQL (last-word rule only) 32,716/124,483; difference 192 from part-word names)
 - PASS: contains '26.4%' (reply contains ('26.4%',))
 
-_3.8 s_
+_4.4 s_
 
 ## Turn 2
 
@@ -74,7 +74,7 @@ Active filters: must include: chicken
 - PASS: contains 'chicken' (reply contains ('chicken',))
 - PASS: does not contain '124,483 matching' (none present)
 
-_0.6 s_
+_0.7 s_
 
 ## Turn 3
 
