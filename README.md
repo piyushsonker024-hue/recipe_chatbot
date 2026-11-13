@@ -95,7 +95,7 @@ user message -> intent.py (Gemini: structured TurnIntent) -> session.py (determi
 | `recipe_bot/substitution.py` | Task 3: stated alternatives, near-identical recipes and usage-pattern evidence; graded, conflict-checked, cited |
 | `recipe_bot/intent.py`, `session.py`, `answer.py`, `chat.py` | LLM parsing, session state, replies, CLI |
 
-**Write-up:** [docs/WRITEUP.md](docs/WRITEUP.md) covers the decisions on retrieval, normalization, ranking, computation, uncertainty and external search, plus the evaluation and its limits. Longer notes with more numbers are in [docs/interview_notes.md](docs/interview_notes.md) (also as a PDF).
+**Write-up:** [docs/WRITEUP.md](docs/WRITEUP.md) covers the decisions on retrieval, normalization, ranking, computation, uncertainty and external search, plus the evaluation and its limits.
 
 ## Known limitations
 

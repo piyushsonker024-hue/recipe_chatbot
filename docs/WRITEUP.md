@@ -4,8 +4,7 @@ A conversational assistant over the Recipe Box dataset (124,483 usable recipes f
 Allrecipes, Epicurious and Food Network). It searches recipes, computes statistics, ranks
 recipes for the ingredients a user has, and suggests substitutions. This write-up explains
 the decisions on retrieval, normalization, ranking, computation, uncertainty and external search,
-and what the evaluation found. Detailed notes, with more numbers, are in
-[interview_notes.md](interview_notes.md); the eval is in [../evals/README.md](../evals/README.md).
+and what the evaluation found. The eval is in [../evals/README.md](../evals/README.md).
 
 ## 1. The central decision: the LLM parses, code answers
 

@@ -7,7 +7,3 @@ pydantic==2.14.3
 # Tests
 pytest==8.4.2
 
-# Docs (scripts/build_notes_pdf.py)
-reportlab==5.1.0
-pillow==13.0.0
-charset-normalizer==3.5.2
