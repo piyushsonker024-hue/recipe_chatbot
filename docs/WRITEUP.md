@@ -152,7 +152,7 @@ Web search is secondary and runs only when the user asks ("search the web"). It 
 Google Search grounding, asking for ratios, effects on the result, and where sources disagree, with no safety claims.
 The output appears in its own section, labeled "WEB SEARCH, not from the dataset, not verified by this system",
 with links, after the dataset evidence. A failure there is never fatal. The live path is tested
-only with a fake client so far, because there was no API key on the build machine.
+only with a fake client so far: live attempts hit Gemini free-tier overload and quota limits.
 
 ## 10. Evaluation
 
@@ -171,7 +171,7 @@ listed recipe is re-checked against the exclusions and step limit, and every cit
   indirect evidence remains (labeled as such).
 - **One-shot baseline:** `python -m evals.one_shot` asks the model the same questions with no data and grades the answers
   (garlic share 26.4%; Allrecipes mean steps 3.32; banana-bread IDs must exist; lobster bisque with a shellfish
-  allergy has 0 matches). **It hasn't been run yet (no API key).** What can be said without running it: keys are random
+  allergy has 0 matches). **It could not be completed before submission** (Gemini free tier: overload, then the daily quota). What can be said without running it: keys are random
   32-character strings, so any specific recipe ID a one-shot answer gives must be invented. This system cites only
   retrieved IDs, and the eval verifies every one.
 - **Not yet evaluated:** the live parser on real messages (`--live`), for the same reason.

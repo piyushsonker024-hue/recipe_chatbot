@@ -85,7 +85,7 @@ The checks:
 
 `python -m evals.one_shot` asks the same model the same questions with **no data**, then
 grades the answers against the computed results. It writes [ONE_SHOT.md](ONE_SHOT.md) with each
-answer verbatim. **It has not been run yet:** there was no API key on the build machine. Until it runs, these
+answer verbatim. **It could not be completed before submission:** runs on the Gemini free tier hit model overload (503) and then the daily quota (429). Until it runs, these
 are the computed answers it will be graded against:
 
 | Question | Grounded answer (this system) | Why a one-shot answer fails |
@@ -101,5 +101,5 @@ grounded. This system can, because it only cites IDs it retrieved, and the eval 
 ## Limits of this eval
 
 - It is small (10 conversations, 26 turns, 57 checks) and was written by the developer, who also chose the expected intents.
-- Scripted mode doesn't test the parser. Live mode does, but it hasn't been run yet (no key).
+- Scripted mode doesn't test the parser. Live mode does, but it was blocked by the same free-tier limits. One live parse ("banana bread without nuts, 5 steps max") came back correct: title search, nut expansion, 5-step limit. One call is not an evaluation.
 - Substitution checks verify labeling and constraints, not whether the cooked result would be good. That would need cooking it.
