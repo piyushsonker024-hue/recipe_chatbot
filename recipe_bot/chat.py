@@ -11,7 +11,7 @@ import argparse
 import sys
 
 from .answer import HELP, constraint_line, handle
-from .intent import IntentParser, TurnIntent
+from .intent import IntentParser, TurnIntent, api_error_message
 from .substitution import search_web
 from .session import Session
 from .store import connect
@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         parser = IntentParser()
     except Exception as e:     # missing key / SDK problem: fail with a clear message
         print(f"Could not start the language model client: {e}\n"
-              "Set GEMINI_API_KEY (see README).", file=sys.stderr)
+              "Set GEMINI_API_KEY in .env or the environment (see README).", file=sys.stderr)
         return 1
     session = Session()
     print(HELP + "\n")
@@ -70,6 +70,6 @@ def main(argv: list[str] | None = None) -> int:
         try:
             print("\nbot> " + turn(conn, session, parser, message, debug) + "\n")
         except Exception as e:  # keep the session alive on API/network errors
-            print(f"\nbot> Something went wrong ({type(e).__name__}: {e}). "
-                  f"Your filters are unchanged.\n{constraint_line(session)}\n")
+            problem = api_error_message(e) or f"Something went wrong ({type(e).__name__}: {e})."
+            print(f"\nbot> {problem} Your filters are unchanged.\n{constraint_line(session)}\n")
     return 0

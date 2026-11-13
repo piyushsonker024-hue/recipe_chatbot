@@ -14,6 +14,7 @@ from pathlib import Path
 
 from recipe_bot.answer import handle
 from recipe_bot.chat import last_titles
+from recipe_bot.intent import api_error_message
 from recipe_bot.intent import TurnIntent
 from recipe_bot.session import Session
 from recipe_bot.store import connect
@@ -64,20 +65,27 @@ def run_case(conn, case: dict, parser=None, web=None) -> dict:
         expected = TurnIntent(**turn["intent"])
         start = time.time()
         diffs = None
-        if parser is not None:
-            parsed = parser.parse(turn["user"], session, last_titles(conn, session))
-            diffs = parse_diffs(turn["intent"], parsed)
-            intent = parsed
-        else:
-            intent = expected
-        reply = handle(conn, session, intent, web=web)
+        try:
+            if parser is not None:
+                parsed = parser.parse(turn["user"], session, last_titles(conn, session))
+                diffs = parse_diffs(turn["intent"], parsed)
+                intent = parsed
+            else:
+                intent = expected
+            reply = handle(conn, session, intent, web=web)
+        except Exception as e:      # API overload/quota: later turns depend on this one, so stop
+            error = api_error_message(e) or f"{type(e).__name__}: {e}"
+            turns.append({"user": turn["user"], "intent": None, "reply": f"[NOT RUN] {error}",
+                          "checks": [(c.label, False, "not run (API error)") for c in turn["checks"]],
+                          "parse_diffs": None, "seconds": time.time() - start})
+            return {"case": case, "turns": turns, "passed": False, "error": error}
         seconds = time.time() - start
         ctx = Context(conn, session, reply)
         results = [(c.label, *c(ctx)) for c in turn["checks"]]
         turns.append({"user": turn["user"], "intent": intent, "reply": reply, "checks": results,
                       "parse_diffs": diffs, "seconds": seconds})
     passed = all(ok for t in turns for _, ok, _ in t["checks"])
-    return {"case": case, "turns": turns, "passed": passed}
+    return {"case": case, "turns": turns, "passed": passed, "error": None}
 
 
 def transcript(result: dict, live: bool) -> str:
@@ -98,6 +106,8 @@ def transcript(result: dict, live: bool) -> str:
 
 def outcome(result: dict) -> str:
     expect_fail = result["case"].get("expect_fail", False)
+    if result.get("error"):
+        return "ERROR (API; re-run this case)"
     if result["passed"]:
         return "PASS (expected to fail: now fixed?)" if expect_fail else "PASS"
     return "FAIL (known, documented)" if expect_fail else "FAIL"
@@ -152,7 +162,11 @@ def main(argv=None) -> int:
     if not opts.case:
         (OUT / "RESULTS.md").write_text(summary(results, opts.live))
         print(f"Wrote {OUT / 'RESULTS.md'}")
-    unexpected = [r for r in results if not r["passed"] and not r["case"].get("expect_fail")]
+    errors = [r["case"]["name"] for r in results if r.get("error")]
+    if errors:
+        print(f"API errors in: {', '.join(errors)}. Re-run each with --live --case <name>.")
+    unexpected = [r for r in results if not r["passed"]
+                  and (r.get("error") or not r["case"].get("expect_fail"))]
     return 1 if unexpected else 0
 
 

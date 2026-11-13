@@ -201,3 +201,45 @@ def test_warns_when_own_ingredient_contains_excluded_word(conn):
     reply = handle(conn, s, I(action="match", add_have=["1 can coconut milk", "3 bananas", "flour"]))
     assert "your '1 can coconut milk' contains the excluded word(s) milk" in reply
     assert "'flour' contains" not in reply
+
+
+# ---------- overload handling ----------
+
+def busy(code=503):
+    from google.genai import errors
+    cls = errors.ServerError if code >= 500 else errors.ClientError
+    return cls(code, {"error": {"code": code, "message": "busy", "status": "UNAVAILABLE"}}, None)
+
+
+class FlakyModels(FakeModels):
+    """The main model is overloaded; any other model answers."""
+    def generate_content(self, **kwargs):
+        self.calls.append(kwargs)
+        if kwargs["model"] == "main-model":
+            raise busy(503)
+        return SimpleNamespace(text=self.text, candidates=[SimpleNamespace(finish_reason=self.finish_reason)])
+
+
+def test_overloaded_model_falls_back_once():
+    models = FlakyModels(I(action="help").model_dump_json())
+    parser = IntentParser(client=SimpleNamespace(models=models), model="main-model",
+                          fallback_model="backup-model")
+    assert parser.parse("hi", Session(), {}).action == "help"
+    assert [c["model"] for c in models.calls] == ["main-model", "backup-model"]
+    assert parser.last_model == "backup-model"
+
+
+def test_no_fallback_reraises_the_overload():
+    import pytest
+    from google.genai import errors
+    models = FlakyModels("{}")
+    parser = IntentParser(client=SimpleNamespace(models=models), model="main-model", fallback_model=None)
+    with pytest.raises(errors.ServerError):
+        parser.parse("hi", Session(), {})
+
+
+def test_api_error_messages():
+    from recipe_bot.intent import api_error_message
+    assert "overloaded" in api_error_message(busy(503))
+    assert "quota" in api_error_message(busy(429))
+    assert api_error_message(ValueError("x")) is None

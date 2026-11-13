@@ -35,9 +35,13 @@ pip install -r requirements.txt
 python -m recipe_bot.store            # add --rebuild to rebuild
 
 # 4. API key (used to parse messages, and for web search only when you ask)
-#    Get a Gemini API key at https://aistudio.google.com/apikey
-export GEMINI_API_KEY=...             # never commit it; .env is git-ignored
-# optional: export RECIPE_BOT_MODEL=gemini-3.8-flash   (the default; any Gemini model ID works)
+#    Get a Gemini API key at https://aistudio.google.com/apikey, then either:
+cp .env.example .env                  # and put the key after GEMINI_API_KEY= in .env
+#    or set it in the shell (this wins over .env):
+export GEMINI_API_KEY=...
+#    .env is git-ignored, so the key is never committed.
+#    Optional, in .env or the shell: RECIPE_BOT_MODEL=gemini-3.8-flash (the default),
+#    RECIPE_BOT_FALLBACK_MODEL=gemini-3.6-flash (tried if the main model is overloaded; "none" disables)
 
 # 5. Chat
 python main.py                        # add --debug to print each parsed intent

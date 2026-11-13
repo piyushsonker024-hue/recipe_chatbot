@@ -13,7 +13,7 @@ from pathlib import Path
 
 from google.genai import types
 
-from recipe_bot.intent import MODEL
+from recipe_bot.intent import MODEL, api_error_message
 from recipe_bot.search import SearchQuery, search
 from recipe_bot.stats import ingredient_share, step_stats
 from recipe_bot.store import connect
@@ -79,18 +79,28 @@ def main() -> int:
     lines = ["# One-shot LLM baseline", "",
              f"Model: {MODEL}, no tools, no data. Each answer is graded against this system's "
              "computed result; answers are verbatim.", ""]
-    for c in cases(conn):
-        response = client.models.generate_content(
-            model=MODEL, contents=c["question"],
-            config=types.GenerateContentConfig(system_instruction=CONTEXT))
+    questions, answered = cases(conn), 0
+    for c in questions:
+        try:
+            response = client.models.generate_content(
+                model=MODEL, contents=c["question"],
+                config=types.GenerateContentConfig(system_instruction=CONTEXT))
+        except Exception as e:
+            print(f"ERROR {c['question']}: {api_error_message(e) or e}")
+            lines += [f"## {c['question']}", "", f"**Not run:** {api_error_message(e) or e}", ""]
+            continue
         answer = (response.text or "").strip()
+        answered += 1
         ok = c["grade"](answer)
         lines += [f"## {c['question']}", "", f"**Grounded answer (this system):** {c['truth']}", "",
                   f"**One-shot grade:** {'correct' if ok else 'WRONG or ungrounded'}", "",
                   "**One-shot answer:**", "", "> " + answer.replace("\n", "\n> "), ""]
         print(f"{'ok   ' if ok else 'WRONG'} {c['question']}")
+    if not answered:
+        print(f"No question was answered; {OUT} left unchanged.")
+        return 1
     OUT.write_text("\n".join(lines) + "\n")
-    print(f"Wrote {OUT}")
+    print(f"Wrote {OUT} ({answered} of {len(questions)} answered)")
     return 0
 
 

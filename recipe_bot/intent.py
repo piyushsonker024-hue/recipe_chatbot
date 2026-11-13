@@ -7,7 +7,7 @@ rest of the system receives typed fields, not free text.
 
 Model: gemini-3.8-flash with low thinking (an extraction task). The reply is
 constrained to TurnIntent's JSON schema and validated again with Pydantic.
-API key: GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable.
+API key: GEMINI_API_KEY (or GOOGLE_API_KEY), from the environment or the .env file.
 Override the model with RECIPE_BOT_MODEL.
 """
 
@@ -15,10 +15,21 @@ import json
 import os
 from typing import Literal
 
-from google.genai import types
+from google.genai import errors, types
 from pydantic import BaseModel, Field, ValidationError
 
+from .env import load_env
+
+load_env()                                   # .env may set RECIPE_BOT_MODEL too
 MODEL = os.environ.get("RECIPE_BOT_MODEL", "gemini-3.8-flash")
+# Tried once when the main model is still overloaded after retries; "none" disables it.
+FALLBACK_MODEL = (None if os.environ.get("RECIPE_BOT_FALLBACK_MODEL", "").lower() == "none"
+                  else os.environ.get("RECIPE_BOT_FALLBACK_MODEL", "gemini-3.6-flash"))
+# Retry only server overloads (5xx): 4 attempts, waiting about 2, 4, 8 s (with jitter).
+# 429 (rate limit / daily quota) is not retried: every retry would use more of a small
+# free-tier quota, and a used-up daily quota does not come back within seconds.
+RETRY = types.HttpRetryOptions(attempts=4, initial_delay=2.0, max_delay=30.0,
+                               http_status_codes=[500, 502, 503, 504])
 
 StatName = Literal[
     "count", "ingredient_share", "top_ingredients", "step_stats",
@@ -119,18 +130,42 @@ def build_context(session, titles: dict[str, str]) -> str:
 
 
 class IntentParser:
-    """Wraps the Gemini call. `client` is injectable so tests need no API key."""
+    """Wraps the Gemini call. `client` is injectable so tests need no API key.
 
-    def __init__(self, client=None, model: str = MODEL):
+    Overload handling: the client retries 5xx/429 with exponential backoff (RETRY).
+    If the main model is still overloaded (5xx), the fallback model is tried once;
+    `last_model` records which model answered."""
+
+    def __init__(self, client=None, model: str = MODEL, fallback_model: str | None = FALLBACK_MODEL):
         self.client = client if client is not None else make_client()
         self.model = model
+        self.fallback_model = fallback_model if fallback_model != model else None
+        self.last_model = None
 
     def parse(self, message: str, session, titles: dict[str, str]) -> TurnIntent | None:
         """Return the intent, or None if the model was blocked, cut off, or returned
         something that does not validate against TurnIntent."""
+        contents = f"Session state:\n{build_context(session, titles)}\n\nUser message:\n{message}"
+        try:
+            response = self.generate(self.model, contents)
+        except errors.ServerError as busy:           # still overloaded after retries
+            if not self.fallback_model:
+                raise
+            try:
+                response = self.generate(self.fallback_model, contents)
+            except errors.APIError:
+                raise busy from None                 # report the original problem
+        if not finished(response):
+            return None
+        try:
+            return TurnIntent.model_validate_json(response.text)
+        except ValidationError:
+            return None
+
+    def generate(self, model: str, contents: str):
         response = self.client.models.generate_content(
-            model=self.model,
-            contents=f"Session state:\n{build_context(session, titles)}\n\nUser message:\n{message}",
+            model=model,
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
@@ -139,18 +174,29 @@ class IntentParser:
                 max_output_tokens=8192,
             ),
         )
-        if not finished(response):
-            return None
-        try:
-            return TurnIntent.model_validate_json(response.text)
-        except ValidationError:
-            return None
+        self.last_model = model
+        return response
 
 
 def make_client():
-    """Gemini client; reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment."""
+    """Gemini client; reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment,
+    after loading the project's .env file (see env.py)."""
     from google import genai
-    return genai.Client()
+    load_env()
+    return genai.Client(http_options=types.HttpOptions(retry_options=RETRY))
+
+
+def api_error_message(e: Exception) -> str | None:
+    """Plain-language message for Gemini API errors, or None for other errors."""
+    code = getattr(e, "code", None)
+    if not isinstance(e, errors.APIError):
+        return None
+    if code == 429:
+        return ("Gemini rate limit or daily free quota reached (429). Wait a minute, or try "
+                "again tomorrow if the daily quota is used up.")
+    if isinstance(e, errors.ServerError):
+        return f"The Gemini model is overloaded or unavailable right now ({code}). Try again in a minute."
+    return f"Gemini API error {code}: {getattr(e, 'message', e)}"
 
 
 def finished(response) -> bool:
