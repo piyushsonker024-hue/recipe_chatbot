@@ -1,0 +1,19 @@
+# Virtual environments
+.venv/
+venv/
+
+# Dataset (download separately, see README)
+data/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
